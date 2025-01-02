@@ -30,22 +30,26 @@ def initialize_session_state():
         st.session_state.refresh_token = None
     if 'current_component' not in st.session_state:
         st.session_state.current_component = None
-    if 'view' not in st.session_state:
-        st.session_state.view = "Component Library"
+    if 'page' not in st.session_state:
+        st.session_state.page = "Component Library"
     if 'show_success' not in st.session_state:
         st.session_state.show_success = False
     if 'success_message' not in st.session_state:
         st.session_state.success_message = ""
     if 'verification_requested' not in st.session_state:
         st.session_state.verification_requested = False
-    if 'nav_selection' not in st.session_state:
-        st.session_state.nav_selection = "Component Library"
+
+def navigate_to(page: str):
+    """Handle navigation to different pages."""
+    st.session_state.page = page
+    if page == "Component Library":
+        st.session_state.current_component = None
 
 def handle_nav_change():
     """Handle navigation changes."""
     # Force a rerun if view is different from nav_selection
-    if st.session_state.view != st.session_state.nav_selection:
-        st.session_state.view = st.session_state.nav_selection
+    if st.session_state.page != st.session_state.nav_selection:
+        st.session_state.page = st.session_state.nav_selection
         if st.session_state.nav_selection == "Component Library":
             st.session_state.current_component = None
         st.rerun()
@@ -805,8 +809,7 @@ def add_component():
                     # Set success state
                     st.session_state.show_success = True
                     st.session_state.success_message = "Component added successfully!"
-                    st.session_state.nav_selection = "Component Library"
-                    st.session_state.view = "Component Library"
+                    st.session_state.page = "Component Library"
                     st.session_state.current_component = None
                     
                     # Clear form by removing all form-related keys from session state
@@ -915,44 +918,42 @@ def main():
     # Check if user is already logged in
     if not st.session_state.authenticated and not check_session():
         login()
-    else:
-        # Sidebar navigation
-        st.sidebar.title("Navigation")
-        
-        # Add logout button to sidebar
-        if st.sidebar.button("Logout", use_container_width=True):
-            handle_auth_error()
-            st.rerun()
-        
-        # Navigation options using radio and callback
-        nav_view = st.sidebar.radio(
+        return
+
+    # Navigation sidebar
+    with st.sidebar:
+        st.title("Navigation")
+        pages = ["Component Library", "Add Component", "Analytics Dashboard"]
+        selected_page = st.selectbox(
             "Go to",
-            ["Component Library", "Add Component", "Analytics Dashboard"],
-            key="nav_selection",
-            on_change=handle_nav_change,
-            index=["Component Library", "Add Component", "Analytics Dashboard"].index(st.session_state.view)
+            pages,
+            index=pages.index(st.session_state.page),
+            key="page_selection",
+            on_change=lambda: navigate_to(st.session_state.page_selection)
         )
         
-        # Show success message if needed
-        if st.session_state.show_success:
-            st.success(st.session_state.success_message)
-            st.session_state.show_success = False
-            st.session_state.success_message = ""
-        
-        # Main content based on view state
-        current_view = st.session_state.view
-        if current_view == "Component Library":
+        st.divider()
+        if st.button("Logout", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            initialize_session_state()
+            st.rerun()
+
+    # Main content area
+    try:
+        if st.session_state.page == "Component Library":
             if st.session_state.current_component:
                 view_component_details(st.session_state.current_component)
-                if st.button("Back to Library"):
-                    st.session_state.current_component = None
-                    st.rerun()
             else:
                 view_component_library()
-        elif current_view == "Add Component":
+        elif st.session_state.page == "Add Component":
             add_component()
-        else:
+        elif st.session_state.page == "Analytics Dashboard":
             analytics_dashboard()
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+        if "Invalid JWT" in str(e) or "JWT expired" in str(e):
+            handle_auth_error()
         
         # Show current user
         st.sidebar.markdown("---")
