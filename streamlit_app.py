@@ -381,23 +381,27 @@ def edit_component(component):
     with col2:
         # Add archive button
         is_archived = component.get('is_archived', False)
+        archive_btn_label = "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component"
         if st.button(
-            "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
+            archive_btn_label,
             key=f"archive_btn_{component['id']}_edit",
             type="secondary",
             help="Archive/Unarchive this component. Archived components won't appear in the main view."
         ):
-            try:
-                # Update archive status
-                supabase.table('components').update(
-                    {"is_archived": not is_archived}
-                ).eq('id', component['id']).execute()
-                st.success("Component " + ("unarchived" if is_archived else "archived") + " successfully!")
-                st.session_state.current_component = None
-                st.session_state.editing = False
-                st.rerun()
-            except Exception as e:
-                st.error(f"Failed to {'unarchive' if is_archived else 'archive'} component: {str(e)}")
+            action = "unarchive" if is_archived else "archive"
+            if st.warning(f"Are you sure you want to {action} this component?", icon="⚠️"):
+                if st.button(f"Yes, {action} it", key=f"confirm_archive_{component['id']}_edit"):
+                    try:
+                        # Update archive status
+                        supabase.table('components').update(
+                            {"is_archived": not is_archived}
+                        ).eq('id', component['id']).execute()
+                        st.success(f"Component {action}d successfully!")
+                        st.session_state.current_component = None
+                        st.session_state.editing = False
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to {action} component: {str(e)}")
     
     # Display component metadata
     created_at = datetime.fromisoformat(component['created_at'].replace('Z', '+00:00'))
@@ -594,22 +598,26 @@ def view_component_details(component_id):
             st.write(f"Last updated: {component['updated_at'][:10]}")
             # Add archive button
             is_archived = component.get('is_archived', False)
+            archive_btn_label = "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component"
             if st.button(
-                "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
+                archive_btn_label,
                 key=f"archive_btn_{component_id}_view",
                 type="secondary",
                 help="Archive/Unarchive this component. Archived components won't appear in the main view."
             ):
-                try:
-                    # Update archive status
-                    supabase.table('components').update(
-                        {"is_archived": not is_archived}
-                    ).eq('id', component['id']).execute()
-                    st.success("Component " + ("unarchived" if is_archived else "archived") + " successfully!")
-                    st.session_state.current_component = None
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to {'unarchive' if is_archived else 'archive'} component: {str(e)}")
+                action = "unarchive" if is_archived else "archive"
+                if st.warning(f"Are you sure you want to {action} this component?", icon="⚠️"):
+                    if st.button(f"Yes, {action} it", key=f"confirm_archive_{component_id}_view"):
+                        try:
+                            # Update archive status
+                            supabase.table('components').update(
+                                {"is_archived": not is_archived}
+                            ).eq('id', component_id).execute()
+                            st.success(f"Component {action}d successfully!")
+                            st.session_state.current_component = None
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to {action} component: {str(e)}")
             
             if st.button("✏️ Edit Component", key=f"edit_btn_{component_id}_view"):
                 st.session_state.editing = True
@@ -912,17 +920,33 @@ def analytics_dashboard():
         
         # Key Metrics
         col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
             st.metric("Total Components", len(components))
+            
         with col2:
-            frontend_count = len(components[components['type'] == 'Frontend'])
-            st.metric("Frontend Components", frontend_count)
+            total_time_saved = sum(
+                float(comp['business_value'].get('time_saved', 0))
+                for comp in response.data
+                if comp.get('business_value')
+            )
+            st.metric("Total Time Saved (hours)", f"{total_time_saved:,.0f}")
+            
         with col3:
-            backend_count = len(components[components['type'] == 'Backend'])
-            st.metric("Backend Components", backend_count)
+            total_cost_savings = sum(
+                float(comp['business_value'].get('cost_savings', 0))
+                for comp in response.data
+                if comp.get('business_value')
+            )
+            st.metric("Total Cost Savings ($)", f"{total_cost_savings:,.2f}")
+            
         with col4:
-            fullstack_count = len(components[components['type'] == 'Full Stack'])
-            st.metric("Full Stack Components", fullstack_count)
+            components_with_tests = len([
+                comp for comp in response.data
+                if comp.get('has_unit_tests') or comp.get('has_integration_tests') or comp.get('has_e2e_tests')
+            ])
+            test_coverage = (components_with_tests / len(components) * 100) if len(components) > 0 else 0
+            st.metric("Components with Tests", f"{test_coverage:.1f}%")
         
         # Components by Type
         if not components.empty:
@@ -958,17 +982,19 @@ def analytics_dashboard():
         # Business Value Analysis
         if not components.empty:
             total_time_saved = sum(
-                component.get('business_value', {}).get('time_saved', 0) 
-                for component in components['business_value'] if isinstance(component, dict)
+                float(comp['business_value'].get('time_saved', 0))
+                for comp in response.data
+                if comp.get('business_value')
             )
             total_cost_savings = sum(
-                component.get('business_value', {}).get('cost_savings', 0) 
-                for component in components['business_value'] if isinstance(component, dict)
+                float(comp['business_value'].get('cost_savings', 0))
+                for comp in response.data
+                if comp.get('business_value')
             )
             
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("Total Time Saved", f"{total_time_saved:,} hours")
+                st.metric("Total Time Saved", f"{total_time_saved:,.0f} hours")
             with col2:
                 st.metric("Total Cost Savings", f"${total_cost_savings:,.2f}")
         
