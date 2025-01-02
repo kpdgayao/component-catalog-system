@@ -374,7 +374,7 @@ def edit_component(component):
     col1, col2 = st.columns([1, 4])
     with col1:
         # Return to Component Library button
-        if st.button("← Return to Library"):
+        if st.button("← Return to Library", key=f"return_btn_{component['id']}_edit"):
             st.session_state.current_component = None
             st.session_state.editing = False
             st.rerun()
@@ -383,6 +383,7 @@ def edit_component(component):
         is_archived = component.get('is_archived', False)
         if st.button(
             "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
+            key=f"archive_btn_{component['id']}_edit",
             type="secondary",
             help="Archive/Unarchive this component. Archived components won't appear in the main view."
         ):
@@ -577,7 +578,7 @@ def view_component_details(component_id):
         component = response.data[0]
         
         # Return to Component Library button
-        if st.button("← Return to Component Library"):
+        if st.button("← Return to Component Library", key=f"return_btn_{component_id}_view"):
             st.session_state.current_component = None
             st.rerun()
         
@@ -595,6 +596,7 @@ def view_component_details(component_id):
             is_archived = component.get('is_archived', False)
             if st.button(
                 "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
+                key=f"archive_btn_{component_id}_view",
                 type="secondary",
                 help="Archive/Unarchive this component. Archived components won't appear in the main view."
             ):
@@ -609,7 +611,7 @@ def view_component_details(component_id):
                 except Exception as e:
                     st.error(f"Failed to {'unarchive' if is_archived else 'archive'} component: {str(e)}")
             
-            if st.button("✏️ Edit Component"):
+            if st.button("✏️ Edit Component", key=f"edit_btn_{component_id}_view"):
                 st.session_state.editing = True
                 st.rerun()
         
