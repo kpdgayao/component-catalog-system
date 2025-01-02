@@ -74,6 +74,7 @@ CREATE TABLE components (
     integration_patterns TEXT,
     troubleshooting_guide TEXT,
     category_id UUID REFERENCES categories(id),
+    created_by VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

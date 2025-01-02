@@ -354,21 +354,37 @@ def upload_file(component_id: str, file) -> Optional[str]:
 def edit_component(component):
     st.title("Edit Component")
     
+    # Return to Component Library button
+    if st.button("← Return to Component Library"):
+        st.session_state.editing = False
+        st.rerun()
+    
     # Display component metadata
     created_at = datetime.fromisoformat(component['created_at'].replace('Z', '+00:00'))
-    st.info(f"Created on: {created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    st.info(f"Created on: {created_at.strftime('%Y-%m-%d %H:%M:%S')} by {st.session_state.user.email}")
     
     # Add delete button at the top
     if st.button("🗑️ Delete Component", type="secondary", help="Permanently delete this component"):
         if st.warning("Are you sure you want to delete this component? This action cannot be undone."):
             try:
+                # Delete component files from storage first
+                files_response = supabase.table('component_files').select("file_path").eq('component_id', component['id']).execute()
+                if files_response.data:
+                    for file in files_response.data:
+                        try:
+                            supabase.storage.from_("component-files").remove([file['file_path']])
+                        except Exception as e:
+                            st.error(f"Failed to delete file {file['file_path']}: {str(e)}")
+                
+                # Delete the component (this will cascade delete related records)
                 supabase.table('components').delete().eq('id', component['id']).execute()
                 st.success("Component deleted successfully!")
                 st.session_state.page = "Component Library"
+                st.session_state.editing = False
                 st.rerun()
             except Exception as e:
                 st.error(f"Failed to delete component: {str(e)}")
-    
+                
     with st.form("edit_component_form"):
         # 1. Component Basic Information
         st.subheader("1. Basic Information")
@@ -774,7 +790,6 @@ def add_component():
             try:
                 # Create component
                 component_data = {
-                    "id": str(uuid.uuid4()),
                     "name": name,
                     "type": component_type,
                     "original_project": original_project,
@@ -809,6 +824,7 @@ def add_component():
                     "integration_patterns": integration_patterns,
                     "troubleshooting_guide": troubleshooting_guide,
                     "category_id": category if category else None,
+                    "created_by": st.session_state.user.email
                 }
                 
                 response = supabase.table('components').insert(component_data).execute()
