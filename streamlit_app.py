@@ -43,9 +43,12 @@ def initialize_session_state():
 
 def handle_nav_change():
     """Handle navigation changes."""
-    st.session_state.view = st.session_state.nav_selection
-    if st.session_state.nav_selection == "Component Library":
-        st.session_state.current_component = None
+    # Force a rerun if view is different from nav_selection
+    if st.session_state.view != st.session_state.nav_selection:
+        st.session_state.view = st.session_state.nav_selection
+        if st.session_state.nav_selection == "Component Library":
+            st.session_state.current_component = None
+        st.rerun()
 
 def check_session():
     """Check and refresh the user's session if needed."""
@@ -820,7 +823,7 @@ def add_component():
             st.warning("Please provide at least the component name.")
 
 def analytics_dashboard():
-    st.header("Analytics Dashboard")
+    st.title("Analytics Dashboard")
     
     try:
         # Fetch all necessary data
@@ -921,8 +924,8 @@ def main():
             handle_auth_error()
             st.rerun()
         
-        # Navigation options
-        st.sidebar.radio(
+        # Navigation options using radio and callback
+        nav_view = st.sidebar.radio(
             "Go to",
             ["Component Library", "Add Component", "Analytics Dashboard"],
             key="nav_selection",
@@ -936,8 +939,9 @@ def main():
             st.session_state.show_success = False
             st.session_state.success_message = ""
         
-        # Main content
-        if st.session_state.view == "Component Library":
+        # Main content based on view state
+        current_view = st.session_state.view
+        if current_view == "Component Library":
             if st.session_state.current_component:
                 view_component_details(st.session_state.current_component)
                 if st.button("Back to Library"):
@@ -945,7 +949,7 @@ def main():
                     st.rerun()
             else:
                 view_component_library()
-        elif st.session_state.view == "Add Component":
+        elif current_view == "Add Component":
             add_component()
         else:
             analytics_dashboard()
