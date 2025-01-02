@@ -371,34 +371,37 @@ def upload_file(component_id: str, file) -> Optional[str]:
 def edit_component(component):
     st.title("Edit Component")
     
-    # Return to Component Library button
-    if st.button("← Return to Component Library"):
-        st.session_state.editing = False
-        st.rerun()
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        # Return to Component Library button
+        if st.button("← Return to Library"):
+            st.session_state.current_component = None
+            st.session_state.editing = False
+            st.rerun()
+    with col2:
+        # Add archive button
+        is_archived = component.get('is_archived', False)
+        if st.button(
+            "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
+            type="secondary",
+            help="Archive/Unarchive this component. Archived components won't appear in the main view."
+        ):
+            try:
+                # Update archive status
+                supabase.table('components').update(
+                    {"is_archived": not is_archived}
+                ).eq('id', component['id']).execute()
+                st.success("Component " + ("unarchived" if is_archived else "archived") + " successfully!")
+                st.session_state.current_component = None
+                st.session_state.editing = False
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to {'unarchive' if is_archived else 'archive'} component: {str(e)}")
     
     # Display component metadata
     created_at = datetime.fromisoformat(component['created_at'].replace('Z', '+00:00'))
     st.info(f"Created on: {created_at.strftime('%Y-%m-%d %H:%M:%S')} by {component.get('created_by', 'Unknown')}")
     
-    # Add archive button at the top
-    is_archived = component.get('is_archived', False)
-    if st.button(
-        "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
-        type="secondary",
-        help="Archive/Unarchive this component. Archived components won't appear in the main view."
-    ):
-        try:
-            # Update archive status
-            supabase.table('components').update(
-                {"is_archived": not is_archived}
-            ).eq('id', component['id']).execute()
-            st.success("Component " + ("unarchived" if is_archived else "archived") + " successfully!")
-            st.session_state.editing = False
-            st.session_state.page = "Component Library"
-            st.rerun()
-        except Exception as e:
-            st.error(f"Failed to {'unarchive' if is_archived else 'archive'} component: {str(e)}")
-                
     with st.form("edit_component_form"):
         # 1. Component Basic Information
         st.subheader("1. Basic Information")
@@ -573,8 +576,10 @@ def view_component_details(component_id):
         
         component = response.data[0]
         
-        if 'editing' not in st.session_state:
-            st.session_state.editing = False
+        # Return to Component Library button
+        if st.button("← Return to Component Library"):
+            st.session_state.current_component = None
+            st.rerun()
         
         # Header
         col1, col2 = st.columns([3, 1])
@@ -582,9 +587,29 @@ def view_component_details(component_id):
             st.header(component['name'])
             st.write(f"Type: {component['type']}")
             st.write(f"Version: {component['version']}")
+            created_at = datetime.fromisoformat(component['created_at'].replace('Z', '+00:00'))
+            st.info(f"Created on: {created_at.strftime('%Y-%m-%d %H:%M:%S')} by {component.get('created_by', 'Unknown')}")
         with col2:
             st.write(f"Last updated: {component['updated_at'][:10]}")
-            if st.button("✏️ Edit", key=f"edit_btn_{component_id}", use_container_width=True):
+            # Add archive button
+            is_archived = component.get('is_archived', False)
+            if st.button(
+                "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
+                type="secondary",
+                help="Archive/Unarchive this component. Archived components won't appear in the main view."
+            ):
+                try:
+                    # Update archive status
+                    supabase.table('components').update(
+                        {"is_archived": not is_archived}
+                    ).eq('id', component['id']).execute()
+                    st.success("Component " + ("unarchived" if is_archived else "archived") + " successfully!")
+                    st.session_state.current_component = None
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to {'unarchive' if is_archived else 'archive'} component: {str(e)}")
+            
+            if st.button("✏️ Edit Component"):
                 st.session_state.editing = True
                 st.rerun()
         
