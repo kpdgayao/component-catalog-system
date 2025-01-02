@@ -14,7 +14,7 @@ try:
     key = st.secrets["supabase_key"]
     supabase: Client = create_client(url, key)
 except Exception as e:
-    st.error(f"❌ Failed to connect to Supabase: {str(e)}")
+    st.error(f"Failed to connect to Supabase: {str(e)}")
     st.info("Please check your .streamlit/secrets.toml file and ensure your Supabase credentials are correct.")
     st.stop()
 
@@ -38,6 +38,14 @@ def initialize_session_state():
         st.session_state.success_message = ""
     if 'verification_requested' not in st.session_state:
         st.session_state.verification_requested = False
+    if 'nav_selection' not in st.session_state:
+        st.session_state.nav_selection = "Component Library"
+
+def handle_nav_change():
+    """Handle navigation changes."""
+    st.session_state.view = st.session_state.nav_selection
+    if st.session_state.nav_selection == "Component Library":
+        st.session_state.current_component = None
 
 def check_session():
     """Check and refresh the user's session if needed."""
@@ -112,7 +120,7 @@ def login():
     # Show verification success message if needed
     if st.session_state.verification_requested:
         st.success("""
-        ✅ Email verified successfully! 
+        Email verified successfully! 
         
         Please log in with your email and password below.
         """)
@@ -148,7 +156,7 @@ def login():
                         error_msg = str(e).lower()
                         if "email not confirmed" in error_msg:
                             st.error("""
-                            ⚠️ Please verify your email address before logging in.
+                            Please verify your email address before logging in.
                             
                             1. Check your @iol.ph email inbox for the verification link
                             2. Click the link in the email
@@ -160,7 +168,7 @@ def login():
                             if st.button("Resend Verification Email"):
                                 try:
                                     supabase.auth.resend_signup_email(email)
-                                    st.success("✉️ Verification email resent! Please check your inbox.")
+                                    st.success("Verification email resent! Please check your inbox.")
                                 except Exception as resend_error:
                                     st.error(f"Failed to resend verification email: {str(resend_error)}")
                         else:
@@ -201,7 +209,7 @@ def login():
                             "password": new_password
                         })
                         st.success("""
-                        ✅ Sign up successful! 
+                        Sign up successful! 
                         
                         **Next Steps:**
                         1. Check your @iol.ph email for the verification link
@@ -299,7 +307,7 @@ def view_component_library():
                     # Display tags
                     if component.get('component_tags'):
                         tags = [tag['tags']['name'] for tag in component['component_tags']]
-                        st.write("🏷️ ", ", ".join(tags))
+                        st.write(" ", ", ".join(tags))
                 with col2:
                     st.write(f"**Type:** {component.get('type', 'N/A')}")
                     st.write(f"**Version:** {component.get('version', 'N/A')}")
@@ -524,7 +532,7 @@ def view_component_details(component_id):
             st.write(f"Version: {component['version']}")
         with col2:
             st.write(f"Last updated: {component['updated_at'][:10]}")
-            if st.button("✏️ Edit Component", key=f"edit_btn_{component_id}", use_container_width=True):
+            if st.button("", key=f"edit_btn_{component_id}", use_container_width=True):
                 st.session_state.editing = True
                 st.rerun()
         
@@ -583,9 +591,9 @@ def view_component_details(component_id):
                 with col1:
                     st.write(f"**Test Coverage:** {component['test_coverage']}%")
                     st.write("**Available Tests:**")
-                    st.write(f"- Unit Tests: {'✓' if component['has_unit_tests'] else '✗'}")
-                    st.write(f"- Integration Tests: {'✓' if component['has_integration_tests'] else '✗'}")
-                    st.write(f"- E2E Tests: {'✓' if component['has_e2e_tests'] else '✗'}")
+                    st.write(f"- Unit Tests: {'' if component['has_unit_tests'] else ''}")
+                    st.write(f"- Integration Tests: {'' if component['has_integration_tests'] else ''}")
+                    st.write(f"- E2E Tests: {'' if component['has_e2e_tests'] else ''}")
             
                 with col2:
                     st.write("**Known Limitations:**")
@@ -608,7 +616,7 @@ def view_component_details(component_id):
                     for file in files_response.data:
                         col1, col2 = st.columns([3, 1])
                         with col1:
-                            st.write(f"📎 {file['file_name']}")
+                            st.write(f" {file['file_name']}")
                             if file['description']:
                                 st.write(file['description'])
                         with col2:
@@ -794,6 +802,7 @@ def add_component():
                     # Set success state
                     st.session_state.show_success = True
                     st.session_state.success_message = "Component added successfully!"
+                    st.session_state.nav_selection = "Component Library"
                     st.session_state.view = "Component Library"
                     st.session_state.current_component = None
                     
@@ -913,10 +922,11 @@ def main():
             st.rerun()
         
         # Navigation options
-        st.session_state.view = st.sidebar.radio(
+        st.sidebar.radio(
             "Go to",
             ["Component Library", "Add Component", "Analytics Dashboard"],
-            key="nav",
+            key="nav_selection",
+            on_change=handle_nav_change,
             index=["Component Library", "Add Component", "Analytics Dashboard"].index(st.session_state.view)
         )
         
