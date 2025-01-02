@@ -330,9 +330,17 @@ def view_component_library():
                     st.write(f"**Created by:** {component.get('created_by', 'N/A')}")
                 with col3:
                     st.write(f"**Last Updated:**  \n{component['updated_at'][:10]}")
-                    if st.button("✏️ Edit", key=f"view_{component['id']}", use_container_width=True):
-                        st.session_state.current_component = component['id']
-                        st.rerun()
+                    col3_1, col3_2 = st.columns(2)
+                    with col3_1:
+                        if st.button("👁️ View", key=f"view_{component['id']}", use_container_width=True):
+                            st.session_state.current_component = component['id']
+                            st.session_state.editing = False
+                            st.rerun()
+                    with col3_2:
+                        if st.button("✏️ Edit", key=f"edit_{component['id']}", use_container_width=True):
+                            st.session_state.current_component = component['id']
+                            st.session_state.editing = True
+                            st.rerun()
                 
     except Exception as e:
         st.error(f"Error fetching components: {str(e)}")
