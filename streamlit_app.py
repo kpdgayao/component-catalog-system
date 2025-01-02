@@ -36,46 +36,47 @@ def initialize_session_state():
         st.session_state.show_success = False
     if 'success_message' not in st.session_state:
         st.session_state.success_message = ""
+    if 'verification_requested' not in st.session_state:
+        st.session_state.verification_requested = False
 
 def check_session():
     """Check and refresh the user's session if needed."""
     try:
-        # First check URL parameters for email verification
+        # Check URL parameters
         query_params = st.experimental_get_query_params()
-        if 'type' in query_params and query_params['type'][0] == 'recovery':
-            st.info("Please complete your email verification and then log in.")
-            return False
-            
-        # Check for access token in URL (from email verification)
-        if 'access_token' in query_params:
-            try:
-                # Verify the token from URL
-                user = supabase.auth.get_user(query_params['access_token'][0])
-                if user:
-                    st.session_state.authenticated = True
-                    st.session_state.user = user.user
-                    st.session_state.access_token = query_params['access_token'][0]
-                    # Clear URL parameters
+        
+        # Handle email verification
+        if 'type' in query_params and query_params['type'][0] == 'signup':
+            if 'token' in query_params:
+                try:
+                    # Verify the token
+                    response = supabase.auth.verify_signup({
+                        'token': query_params['token'][0],
+                        'type': 'signup',
+                    })
+                    if response and response.user:
+                        st.session_state.authenticated = True
+                        st.session_state.user = response.user
+                        st.session_state.access_token = response.session.access_token
+                        st.session_state.refresh_token = response.session.refresh_token
+                        st.session_state.verification_requested = True
+                        # Clear URL parameters
+                        st.experimental_set_query_params()
+                        return True
+                except Exception as e:
+                    print(f"Verification error: {str(e)}")
                     st.experimental_set_query_params()
-                    st.success("Email verified successfully! You are now logged in.")
-                    return True
-            except Exception as e:
-                print(f"Email verification error: {str(e)}")
-                st.experimental_set_query_params()
-                st.error("Email verification failed. Please try logging in.")
-                return False
+                    return False
 
-        # Then check session state
+        # Check existing session
         if st.session_state.access_token:
             try:
-                # Verify the current session
                 user = supabase.auth.get_user(st.session_state.access_token)
                 if user:
                     st.session_state.authenticated = True
                     st.session_state.user = user.user
                     return True
             except Exception:
-                # Token might be expired, try refreshing
                 if st.session_state.refresh_token:
                     try:
                         response = supabase.auth.refresh_session(st.session_state.refresh_token)
@@ -108,21 +109,14 @@ def login():
     st.write("Welcome to the IOL Inc. Component Catalog System. Please login or sign up to continue.")
     st.info("Note: This system is only accessible to IOL Inc. employees with @iol.ph email addresses.")
     
-    # Handle email verification redirects
-    try:
-        query_params = st.experimental_get_query_params()
+    # Show verification success message if needed
+    if st.session_state.verification_requested:
+        st.success("""
+        ✅ Email verified successfully! 
         
-        # Check if this is a Supabase email confirmation
-        if 'confirmation' in query_params:
-            st.success("""
-            Thank you for confirming your email! 
-            
-            Please log in below with your @iol.ph email and password.
-            """)
-            # Clear the parameters
-            st.experimental_set_query_params()
-    except Exception as e:
-        print(f"Error handling query params: {str(e)}")
+        Please log in with your email and password below.
+        """)
+        st.session_state.verification_requested = False
     
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
     
@@ -144,7 +138,6 @@ def login():
                             "email": email,
                             "password": password
                         })
-                        # Store session information
                         st.session_state.authenticated = True
                         st.session_state.user = response.user
                         st.session_state.access_token = response.session.access_token
@@ -155,18 +148,19 @@ def login():
                         error_msg = str(e).lower()
                         if "email not confirmed" in error_msg:
                             st.error("""
-                            Please verify your email address before logging in.
+                            ⚠️ Please verify your email address before logging in.
                             
                             1. Check your @iol.ph email inbox for the verification link
                             2. Click the link in the email
-                            3. After verification, return to this page to log in
+                            3. You'll be redirected back to this app
+                            4. Log in with your credentials
                             
                             Can't find the email? Check your spam folder or click the resend button below.
                             """)
                             if st.button("Resend Verification Email"):
                                 try:
                                     supabase.auth.resend_signup_email(email)
-                                    st.success("Verification email resent! Please check your inbox.")
+                                    st.success("✉️ Verification email resent! Please check your inbox.")
                                 except Exception as resend_error:
                                     st.error(f"Failed to resend verification email: {str(resend_error)}")
                         else:
