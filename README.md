@@ -2,6 +2,8 @@
 
 A Streamlit-based web application for managing reusable software components at IOL Inc.
 
+Last updated: 2025-01-02
+
 ## Setup Instructions
 
 1. Install dependencies:
