@@ -354,12 +354,9 @@ def upload_file(component_id: str, file) -> Optional[str]:
 def edit_component(component):
     st.title("Edit Component")
     
-    # Display component creator information
-    creator_info = supabase.table('components').select('created_by, created_at').eq('id', component['id']).execute()
-    if creator_info.data:
-        creator_email = creator_info.data[0]['created_by']
-        created_at = datetime.fromisoformat(creator_info.data[0]['created_at'].replace('Z', '+00:00'))
-        st.info(f"Created by: {creator_email} on {created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    # Display component metadata
+    created_at = datetime.fromisoformat(component['created_at'].replace('Z', '+00:00'))
+    st.info(f"Created on: {created_at.strftime('%Y-%m-%d %H:%M:%S')}")
     
     # Add delete button at the top
     if st.button("🗑️ Delete Component", type="secondary", help="Permanently delete this component"):
@@ -557,7 +554,7 @@ def view_component_details(component_id):
             st.write(f"Version: {component['version']}")
         with col2:
             st.write(f"Last updated: {component['updated_at'][:10]}")
-            if st.button("", key=f"edit_btn_{component_id}", use_container_width=True):
+            if st.button("✏️ Edit", key=f"edit_btn_{component_id}", use_container_width=True):
                 st.session_state.editing = True
                 st.rerun()
         
