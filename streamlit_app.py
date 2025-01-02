@@ -108,12 +108,21 @@ def login():
     st.write("Welcome to the IOL Inc. Component Catalog System. Please login or sign up to continue.")
     st.info("Note: This system is only accessible to IOL Inc. employees with @iol.ph email addresses.")
     
-    # Check for verification success message
-    query_params = st.experimental_get_query_params()
-    if 'verification' in query_params and query_params['verification'][0] == 'success':
-        st.success("Email verified successfully! You can now log in.")
-        # Clear the parameter
-        st.experimental_set_query_params()
+    # Handle email verification redirects
+    try:
+        query_params = st.experimental_get_query_params()
+        
+        # Check if this is a Supabase email confirmation
+        if 'confirmation' in query_params:
+            st.success("""
+            Thank you for confirming your email! 
+            
+            Please log in below with your @iol.ph email and password.
+            """)
+            # Clear the parameters
+            st.experimental_set_query_params()
+    except Exception as e:
+        print(f"Error handling query params: {str(e)}")
     
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
     
@@ -143,15 +152,39 @@ def login():
                         st.success("Login successful!")
                         st.rerun()
                     except Exception as e:
-                        if "Email not confirmed" in str(e):
-                            st.error("Please verify your email address before logging in. Check your inbox for the verification link.")
+                        error_msg = str(e).lower()
+                        if "email not confirmed" in error_msg:
+                            st.error("""
+                            Please verify your email address before logging in.
+                            
+                            1. Check your @iol.ph email inbox for the verification link
+                            2. Click the link in the email
+                            3. After verification, return to this page to log in
+                            
+                            Can't find the email? Check your spam folder or click the resend button below.
+                            """)
+                            if st.button("Resend Verification Email"):
+                                try:
+                                    supabase.auth.resend_signup_email(email)
+                                    st.success("Verification email resent! Please check your inbox.")
+                                except Exception as resend_error:
+                                    st.error(f"Failed to resend verification email: {str(resend_error)}")
                         else:
                             st.error(f"Login failed: {str(e)}")
     
     with tab2:
         with st.form("signup_form"):
             st.write("Create a new account")
-            st.write("After signing up, you'll receive a verification email. Please check your @iol.ph email inbox (and spam folder) to verify your account.")
+            st.write("""
+            **Important Email Verification Instructions:**
+            1. After signing up, you'll receive a verification email at your @iol.ph address
+            2. Click the verification link in the email
+            3. You'll be redirected back to this app
+            4. If you see an access error, simply return to this page and log in
+            
+            Note: Check your spam folder if you don't see the verification email.
+            """)
+            
             new_email = st.text_input("Email")
             new_password = st.text_input("Password", type='password', 
                                        help="Password must be at least 8 characters long")
@@ -174,14 +207,15 @@ def login():
                             "password": new_password
                         })
                         st.success("""
-                        Sign up successful! 
+                        ✅ Sign up successful! 
                         
-                        **Important:** Please check your IOL Inc. email to verify your account.
-                        1. Look for an email from Supabase
-                        2. Click the verification link
-                        3. After verification, return to this page to log in
+                        **Next Steps:**
+                        1. Check your @iol.ph email for the verification link
+                        2. Click the link to verify your account
+                        3. If you see an access error after verification, simply return to this page
+                        4. Log in with your email and password
                         
-                        Note: If you don't see the verification email in your inbox, please check your spam folder.
+                        Can't find the email? Check your spam folder.
                         """)
                     except Exception as e:
                         st.error(f"Sign up failed: {str(e)}")
