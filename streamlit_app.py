@@ -354,6 +354,24 @@ def upload_file(component_id: str, file) -> Optional[str]:
 def edit_component(component):
     st.title("Edit Component")
     
+    # Display component creator information
+    creator_info = supabase.table('components').select('created_by, created_at').eq('id', component['id']).execute()
+    if creator_info.data:
+        creator_email = creator_info.data[0]['created_by']
+        created_at = datetime.fromisoformat(creator_info.data[0]['created_at'].replace('Z', '+00:00'))
+        st.info(f"Created by: {creator_email} on {created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Add delete button at the top
+    if st.button("🗑️ Delete Component", type="secondary", help="Permanently delete this component"):
+        if st.warning("Are you sure you want to delete this component? This action cannot be undone."):
+            try:
+                supabase.table('components').delete().eq('id', component['id']).execute()
+                st.success("Component deleted successfully!")
+                st.session_state.page = "Component Library"
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to delete component: {str(e)}")
+    
     with st.form("edit_component_form"):
         # 1. Component Basic Information
         st.subheader("1. Basic Information")
@@ -453,7 +471,7 @@ def edit_component(component):
                 default=current_tags
             )
         
-        submitted = st.form_submit_button("Save Changes", use_container_width=True)
+        submitted = st.form_submit_button("💾 Save Changes", use_container_width=True)
         if submitted:
             try:
                 # Update component data
