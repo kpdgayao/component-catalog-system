@@ -243,6 +243,20 @@ INSERT INTO tags (name, description) VALUES
     ('API', 'API-related components'),
     ('Security', 'Security-focused components');
 
+-- Add is_archived column to components table if it doesn't exist
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'components' 
+        AND column_name = 'is_archived'
+    ) THEN 
+        ALTER TABLE components 
+        ADD COLUMN is_archived BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
 -- Create triggers for updated_at
 CREATE TRIGGER update_components_updated_at
     BEFORE UPDATE ON components

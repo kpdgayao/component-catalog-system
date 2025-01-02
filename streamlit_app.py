@@ -257,7 +257,7 @@ def view_component_library():
     
     # Filters
     with st.expander("Advanced Filters"):
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             type_filter = st.multiselect("Type", ["Frontend", "Backend", "Full Stack"])
         with col2:
@@ -272,6 +272,8 @@ def view_component_library():
                 "Tags",
                 tags['name'].tolist() if not tags.empty else []
             )
+        with col4:
+            show_archived = st.checkbox("Show Archived Components", value=False)
     
     try:
         # Build query
@@ -281,11 +283,15 @@ def view_component_library():
         
         # Apply search filter
         if search_query:
-            query = query.or_(f"name.ilike.%{search_query}%,description.ilike.%{search_query}%")
+            query = query.or_(f"name.ilike.%{search_query}%,description.ilike.%{search_query}%,created_by.ilike.%{search_query}%")
         
         # Apply type filter
         if type_filter:
             query = query.in_('type', type_filter)
+            
+        # Filter archived components
+        if not show_archived:
+            query = query.eq('is_archived', False)
         
         # Apply sort
         if sort_by == "Name":
@@ -310,6 +316,8 @@ def view_component_library():
                 col1, col2, col3 = st.columns([3, 1, 1])
                 with col1:
                     st.subheader(component['name'])
+                    if component.get('is_archived'):
+                        st.caption("🗃️ Archived")
                     st.write(component.get('description', ''))
                     # Display tags
                     if component.get('component_tags'):
@@ -319,9 +327,10 @@ def view_component_library():
                     st.write(f"**Type:** {component.get('type', 'N/A')}")
                     st.write(f"**Version:** {component.get('version', 'N/A')}")
                     st.write(f"**Category:** {component['categories']['name'] if component.get('categories') else 'N/A'}")
+                    st.write(f"**Created by:** {component.get('created_by', 'N/A')}")
                 with col3:
                     st.write(f"**Last Updated:**  \n{component['updated_at'][:10]}")
-                    if st.button("View Details", key=f"view_{component['id']}", use_container_width=True):
+                    if st.button("✏️ Edit", key=f"view_{component['id']}", use_container_width=True):
                         st.session_state.current_component = component['id']
                         st.rerun()
                 
@@ -361,29 +370,26 @@ def edit_component(component):
     
     # Display component metadata
     created_at = datetime.fromisoformat(component['created_at'].replace('Z', '+00:00'))
-    st.info(f"Created on: {created_at.strftime('%Y-%m-%d %H:%M:%S')} by {st.session_state.user.email}")
+    st.info(f"Created on: {created_at.strftime('%Y-%m-%d %H:%M:%S')} by {component.get('created_by', 'Unknown')}")
     
-    # Add delete button at the top
-    if st.button("🗑️ Delete Component", type="secondary", help="Permanently delete this component"):
-        if st.warning("Are you sure you want to delete this component? This action cannot be undone."):
-            try:
-                # Delete component files from storage first
-                files_response = supabase.table('component_files').select("file_path").eq('component_id', component['id']).execute()
-                if files_response.data:
-                    for file in files_response.data:
-                        try:
-                            supabase.storage.from_("component-files").remove([file['file_path']])
-                        except Exception as e:
-                            st.error(f"Failed to delete file {file['file_path']}: {str(e)}")
-                
-                # Delete the component (this will cascade delete related records)
-                supabase.table('components').delete().eq('id', component['id']).execute()
-                st.success("Component deleted successfully!")
-                st.session_state.page = "Component Library"
-                st.session_state.editing = False
-                st.rerun()
-            except Exception as e:
-                st.error(f"Failed to delete component: {str(e)}")
+    # Add archive button at the top
+    is_archived = component.get('is_archived', False)
+    if st.button(
+        "🗃️ Unarchive Component" if is_archived else "🗃️ Archive Component",
+        type="secondary",
+        help="Archive/Unarchive this component. Archived components won't appear in the main view."
+    ):
+        try:
+            # Update archive status
+            supabase.table('components').update(
+                {"is_archived": not is_archived}
+            ).eq('id', component['id']).execute()
+            st.success("Component " + ("unarchived" if is_archived else "archived") + " successfully!")
+            st.session_state.editing = False
+            st.session_state.page = "Component Library"
+            st.rerun()
+        except Exception as e:
+            st.error(f"Failed to {'unarchive' if is_archived else 'archive'} component: {str(e)}")
                 
     with st.form("edit_component_form"):
         # 1. Component Basic Information
@@ -860,8 +866,14 @@ def analytics_dashboard():
     st.title("Analytics Dashboard")
     
     try:
-        # Fetch all necessary data
-        components = pd.DataFrame(supabase.table('components').select("*").execute().data)
+        # Fetch all components excluding archived ones
+        response = supabase.table('components').select(
+            "*",
+            "categories(name)",
+            "component_tags(tags(name))"
+        ).eq('is_archived', False).execute()
+        
+        components = pd.DataFrame(response.data)
         
         # Key Metrics
         col1, col2, col3, col4 = st.columns(4)
