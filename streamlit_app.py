@@ -40,8 +40,13 @@ def initialize_session_state():
 def check_session():
     """Check and refresh the user's session if needed."""
     try:
-        # First check URL parameters for access_token (from email verification)
+        # First check URL parameters for email verification
         query_params = st.experimental_get_query_params()
+        if 'type' in query_params and query_params['type'][0] == 'recovery':
+            st.info("Please complete your email verification and then log in.")
+            return False
+            
+        # Check for access token in URL (from email verification)
         if 'access_token' in query_params:
             try:
                 # Verify the token from URL
@@ -52,9 +57,12 @@ def check_session():
                     st.session_state.access_token = query_params['access_token'][0]
                     # Clear URL parameters
                     st.experimental_set_query_params()
+                    st.success("Email verified successfully! You are now logged in.")
                     return True
-            except Exception:
+            except Exception as e:
+                print(f"Email verification error: {str(e)}")
                 st.experimental_set_query_params()
+                st.error("Email verification failed. Please try logging in.")
                 return False
 
         # Then check session state
@@ -100,6 +108,13 @@ def login():
     st.write("Welcome to the IOL Inc. Component Catalog System. Please login or sign up to continue.")
     st.info("Note: This system is only accessible to IOL Inc. employees with @iol.ph email addresses.")
     
+    # Check for verification success message
+    query_params = st.experimental_get_query_params()
+    if 'verification' in query_params and query_params['verification'][0] == 'success':
+        st.success("Email verified successfully! You can now log in.")
+        # Clear the parameter
+        st.experimental_set_query_params()
+    
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
     
     with tab1:
@@ -128,11 +143,15 @@ def login():
                         st.success("Login successful!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Login failed: {str(e)}")
+                        if "Email not confirmed" in str(e):
+                            st.error("Please verify your email address before logging in. Check your inbox for the verification link.")
+                        else:
+                            st.error(f"Login failed: {str(e)}")
     
     with tab2:
         with st.form("signup_form"):
             st.write("Create a new account")
+            st.write("After signing up, you'll receive a verification email. Please check your @iol.ph email inbox (and spam folder) to verify your account.")
             new_email = st.text_input("Email")
             new_password = st.text_input("Password", type='password', 
                                        help="Password must be at least 8 characters long")
@@ -156,7 +175,12 @@ def login():
                         })
                         st.success("""
                         Sign up successful! 
-                        Please check your IOL Inc. email to verify your account.
+                        
+                        **Important:** Please check your IOL Inc. email to verify your account.
+                        1. Look for an email from Supabase
+                        2. Click the verification link
+                        3. After verification, return to this page to log in
+                        
                         Note: If you don't see the verification email in your inbox, please check your spam folder.
                         """)
                     except Exception as e:
