@@ -30,31 +30,58 @@ def initialize_session_state():
         st.session_state.refresh_token = None
     if 'current_component' not in st.session_state:
         st.session_state.current_component = None
+    if 'view' not in st.session_state:
+        st.session_state.view = "Component Library"
+    if 'show_success' not in st.session_state:
+        st.session_state.show_success = False
+    if 'success_message' not in st.session_state:
+        st.session_state.success_message = ""
 
 def check_session():
     """Check and refresh the user's session if needed."""
-    if st.session_state.access_token:
-        try:
-            # Verify the current session
-            user = supabase.auth.get_user(st.session_state.access_token)
-            if user:
-                st.session_state.authenticated = True
-                st.session_state.user = user.user
-                return True
-        except Exception:
-            # Token might be expired, try refreshing
+    try:
+        # First check URL parameters for access_token (from email verification)
+        query_params = st.experimental_get_query_params()
+        if 'access_token' in query_params:
             try:
-                if st.session_state.refresh_token:
-                    response = supabase.auth.refresh_session(st.session_state.refresh_token)
-                    st.session_state.access_token = response.session.access_token
-                    st.session_state.refresh_token = response.session.refresh_token
+                # Verify the token from URL
+                user = supabase.auth.get_user(query_params['access_token'][0])
+                if user:
                     st.session_state.authenticated = True
-                    st.session_state.user = response.user
+                    st.session_state.user = user.user
+                    st.session_state.access_token = query_params['access_token'][0]
+                    # Clear URL parameters
+                    st.experimental_set_query_params()
                     return True
             except Exception:
-                pass
-    
-    return False
+                st.experimental_set_query_params()
+                return False
+
+        # Then check session state
+        if st.session_state.access_token:
+            try:
+                # Verify the current session
+                user = supabase.auth.get_user(st.session_state.access_token)
+                if user:
+                    st.session_state.authenticated = True
+                    st.session_state.user = user.user
+                    return True
+            except Exception:
+                # Token might be expired, try refreshing
+                if st.session_state.refresh_token:
+                    try:
+                        response = supabase.auth.refresh_session(st.session_state.refresh_token)
+                        st.session_state.access_token = response.session.access_token
+                        st.session_state.refresh_token = response.session.refresh_token
+                        st.session_state.authenticated = True
+                        st.session_state.user = response.user
+                        return True
+                    except Exception:
+                        pass
+        return False
+    except Exception as e:
+        print(f"Session check error: {str(e)}")
+        return False
 
 def handle_auth_error():
     """Handle authentication errors by clearing the session."""
@@ -712,15 +739,17 @@ def add_component():
                         tag_data = [{"component_id": component_id, "tag_id": tag_id} for tag_id in selected_tags]
                         supabase.table('component_tags').insert(tag_data).execute()
                     
-                    st.success("Component added successfully!")
-                    st.session_state.current_component = component_id
+                    # Set success state
+                    st.session_state.show_success = True
+                    st.session_state.success_message = "Component added successfully!"
+                    st.session_state.view = "Component Library"
+                    st.session_state.current_component = None
                     
-                    # Clear form by removing all keys from session state
-                    for key in st.session_state.keys():
-                        if key not in ['authenticated', 'user', 'current_component']:
-                            del st.session_state[key]
+                    # Clear form by removing all form-related keys from session state
+                    form_keys = [key for key in st.session_state.keys() if key.startswith(('name_', 'type_', 'project_', 'version_', 'devs_', 'docs_', 'desc_'))]
+                    for key in form_keys:
+                        del st.session_state[key]
                     
-                    # Redirect to component details
                     st.rerun()
                 else:
                     st.error("Failed to add component. No data returned from the server.")
@@ -816,6 +845,7 @@ def analytics_dashboard():
         st.error(f"Error fetching analytics: {str(e)}")
 
 def main():
+    # Initialize session state
     initialize_session_state()
     
     # Check if user is already logged in
@@ -831,12 +861,21 @@ def main():
             st.rerun()
         
         # Navigation options
-        nav_selection = st.sidebar.radio(
+        st.session_state.view = st.sidebar.radio(
             "Go to",
-            ["Component Library", "Add Component", "Analytics Dashboard"]
+            ["Component Library", "Add Component", "Analytics Dashboard"],
+            key="nav",
+            index=["Component Library", "Add Component", "Analytics Dashboard"].index(st.session_state.view)
         )
         
-        if nav_selection == "Component Library":
+        # Show success message if needed
+        if st.session_state.show_success:
+            st.success(st.session_state.success_message)
+            st.session_state.show_success = False
+            st.session_state.success_message = ""
+        
+        # Main content
+        if st.session_state.view == "Component Library":
             if st.session_state.current_component:
                 view_component_details(st.session_state.current_component)
                 if st.button("Back to Library"):
@@ -844,7 +883,7 @@ def main():
                     st.rerun()
             else:
                 view_component_library()
-        elif nav_selection == "Add Component":
+        elif st.session_state.view == "Add Component":
             add_component()
         else:
             analytics_dashboard()
