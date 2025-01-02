@@ -13,8 +13,6 @@ try:
     url = st.secrets["supabase_url"]
     key = st.secrets["supabase_key"]
     supabase: Client = create_client(url, key)
-    # Test connection
-    response = supabase.table('components').select("count", count='exact').execute()
     st.success("✅ Successfully connected to Supabase!")
 except Exception as e:
     st.error(f"❌ Failed to connect to Supabase: {str(e)}")

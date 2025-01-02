@@ -1,12 +1,28 @@
+-- Part 1: Create the trigger function first
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Part 2: Create tables and other objects
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Tags Table
-CREATE TABLE tags (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(50) NOT NULL UNIQUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+-- Drop existing tables if they exist
+DROP TABLE IF EXISTS usage_statistics CASCADE;
+DROP TABLE IF EXISTS sample_applications CASCADE;
+DROP TABLE IF EXISTS implementation_examples CASCADE;
+DROP TABLE IF EXISTS features CASCADE;
+DROP TABLE IF EXISTS component_tags CASCADE;
+DROP TABLE IF EXISTS components CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS tags CASCADE;
+
+-- Drop existing triggers
+DROP TRIGGER IF EXISTS update_components_updated_at ON components;
 
 -- Categories Table
 CREATE TABLE categories (
@@ -16,18 +32,47 @@ CREATE TABLE categories (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tags Table
+CREATE TABLE tags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(50) NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Components Table
 CREATE TABLE components (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(50) CHECK (status IN ('Active', 'Deprecated', 'In Development')),
-    category_id UUID REFERENCES categories(id),
+    name VARCHAR(200) NOT NULL,
+    type VARCHAR(50) CHECK (type IN ('Frontend', 'Backend', 'Full Stack')),
+    original_project VARCHAR(200),
     version VARCHAR(50),
-    created_by UUID REFERENCES auth.users(id),
+    category_id UUID REFERENCES categories(id),
+    primary_developers TEXT[],
+    documentation_status VARCHAR(50) CHECK (documentation_status IN ('Complete', 'Partial', 'Needs Update')),
+    description TEXT,
+    technology_stack TEXT[],
+    dependencies TEXT[],
+    aws_services TEXT[],
+    auth_requirements TEXT,
+    db_requirements TEXT,
+    api_endpoints JSONB,
+    test_coverage DECIMAL,
+    has_unit_tests BOOLEAN DEFAULT false,
+    has_integration_tests BOOLEAN DEFAULT false,
+    has_e2e_tests BOOLEAN DEFAULT false,
+    known_limitations TEXT,
+    performance_metrics JSONB,
+    update_frequency VARCHAR(100),
+    breaking_changes_history JSONB,
+    backward_compatibility_notes TEXT,
+    support_contact TEXT,
+    setup_instructions TEXT,
+    configuration_requirements TEXT,
+    integration_patterns TEXT,
+    troubleshooting_guide TEXT,
+    business_value JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(name)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Component Tags Junction Table
@@ -38,35 +83,36 @@ CREATE TABLE component_tags (
     PRIMARY KEY (component_id, tag_id)
 );
 
--- Technical Specifications Table
-CREATE TABLE technical_specifications (
+-- Features Table
+CREATE TABLE features (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    spec_name VARCHAR(255) NOT NULL,
-    spec_value TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Component Files Table
-CREATE TABLE component_files (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    file_name VARCHAR(255) NOT NULL,
-    file_path TEXT NOT NULL,
-    file_type VARCHAR(50),
-    file_size BIGINT,
-    uploaded_by UUID REFERENCES auth.users(id),
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    status VARCHAR(50) CHECK (status IN ('Ready', 'In Progress', 'Planned')),
+    complexity VARCHAR(50) CHECK (complexity IN ('Low', 'Medium', 'High')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Version History Table
-CREATE TABLE version_history (
+-- Implementation Examples Table
+CREATE TABLE implementation_examples (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    version_number VARCHAR(50) NOT NULL,
-    change_description TEXT,
-    changed_by UUID REFERENCES auth.users(id),
+    project_name VARCHAR(200) NOT NULL,
+    use_case TEXT,
+    customizations TEXT,
+    implementation_hours INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Sample Applications Table
+CREATE TABLE sample_applications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
+    industry VARCHAR(200),
+    use_case TEXT,
+    required_customization TEXT,
+    estimated_hours INTEGER,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -74,91 +120,24 @@ CREATE TABLE version_history (
 CREATE TABLE usage_statistics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    used_by UUID REFERENCES auth.users(id),
-    project_name VARCHAR(255),
-    usage_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    project_name VARCHAR(200),
+    usage_date DATE,
+    usage_type VARCHAR(50),
+    usage_count INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Features Table
-CREATE TABLE features (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    feature_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Implementation Examples Table
-CREATE TABLE implementation_examples (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    example TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Sample Applications Table
-CREATE TABLE sample_applications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    application_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Testing/Quality Metrics Table
-CREATE TABLE testing_quality_metrics (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    metric_name VARCHAR(255) NOT NULL,
-    metric_value TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Business Value Metrics Table
-CREATE TABLE business_value_metrics (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    metric_name VARCHAR(255) NOT NULL,
-    metric_value TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Maintainers Table
-CREATE TABLE maintainers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    component_id UUID REFERENCES components(id) ON DELETE CASCADE,
-    maintainer_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create indexes for better performance
+-- Create indexes for better query performance
 CREATE INDEX idx_components_category ON components(category_id);
 CREATE INDEX idx_component_tags_component ON component_tags(component_id);
 CREATE INDEX idx_component_tags_tag ON component_tags(tag_id);
-CREATE INDEX idx_technical_specs_component ON technical_specifications(component_id);
-CREATE INDEX idx_version_history_component ON version_history(component_id);
+CREATE INDEX idx_features_component ON features(component_id);
+CREATE INDEX idx_implementation_component ON implementation_examples(component_id);
+CREATE INDEX idx_sample_apps_component ON sample_applications(component_id);
 CREATE INDEX idx_usage_stats_component ON usage_statistics(component_id);
 
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Add triggers for updated_at
+-- Part 3: Create trigger after tables exist
 CREATE TRIGGER update_components_updated_at
     BEFORE UPDATE ON components
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_technical_specifications_updated_at
-    BEFORE UPDATE ON technical_specifications
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
