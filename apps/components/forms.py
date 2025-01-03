@@ -20,6 +20,16 @@ logger = logging.getLogger(__name__)
 
 # Constants
 COMPONENT_TYPES = ["Frontend", "Backend", "Full Stack", "UI", "Service", "Utility", "Integration"]
+AWS_SERVICE_OPTIONS = [
+    'API Gateway', 'Amplify', 'Bedrock', 'CloudFront', 'Cognito', 'DynamoDB', 'EC2',
+    'ElastiCache', 'Lambda', 'RDS', 'Route 53', 'S3', 'SES', 'SNS', 'SQS'
+]
+
+DEPENDENCY_OPTIONS = [
+    '@aws-sdk', '@mui/material', '@nestjs/common', '@nestjs/core', '@types/react',
+    'axios', 'next', 'node', 'react', 'react-dom', 'react-hook-form', 'tailwindcss',
+    'typescript', 'zustand'
+]
 
 def clear_form_state():
     """Clear all form-related state."""
@@ -230,12 +240,13 @@ def render_technical_details(form_data: Dict[str, Any]):
             except (json.JSONDecodeError, TypeError):
                 current_deps = []
     
-    # Use multiselect for dependencies
+    # Use multiselect for dependencies with predefined options
     form_data['dependencies'] = st.multiselect(
         "Dependencies",
-        options=list(set(current_deps)),  # Use existing dependencies as options
+        options=DEPENDENCY_OPTIONS + [dep for dep in current_deps if dep not in DEPENDENCY_OPTIONS],
         default=current_deps,
-        key="form_dependencies"
+        key="form_dependencies",
+        help="Select the dependencies required by this component"
     )
     
     # AWS Services - always ensure it's a list
@@ -251,14 +262,15 @@ def render_technical_details(form_data: Dict[str, Any]):
             except (json.JSONDecodeError, TypeError):
                 current_aws = []
     
-    # Use multiselect for AWS services
+    # Use multiselect for AWS services with predefined options
     form_data['aws_services'] = st.multiselect(
         "AWS Services",
-        options=list(set(current_aws)),  # Use existing services as options
+        options=AWS_SERVICE_OPTIONS + [svc for svc in current_aws if svc not in AWS_SERVICE_OPTIONS],
         default=current_aws,
-        key="form_aws_services"
+        key="form_aws_services",
+        help="Select the AWS services used in this component"
     )
-    
+
     # Text fields remain the same
     form_data['auth_requirements'] = st.text_area(
         "Authentication Requirements",
